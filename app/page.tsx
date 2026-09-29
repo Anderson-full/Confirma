@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { createRsvp, getEventConfig } from "@/actions/rsvp"; 
 import { CheckCircle2, Calendar, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
 
-// Colocamos os detalhes fora do componente para ficar limpo e rápido
 const eventDetails = {
   title: "Mentoria Comunique com Autoridade",
   location: "Google Meet",
@@ -32,9 +31,9 @@ export default function RsvpPage() {
     end: "2026-10-16T00:00:00.000Z"
   });
 
-  // Novos estados para preparar o link oficial antes do clique
-  const [calendarUrl, setCalendarUrl] = useState("");
-  const [isAndroidDevice, setIsAndroidDevice] = useState(false);
+  // Estados dedicados e precisos para o comportamento do link
+  const [calendarUrl, setCalendarUrl] = useState("#");
+  const [downloadAttr, setDownloadAttr] = useState<string | undefined>(undefined);
 
   const toggleSound = () => {
     if (videoRef.current) {
@@ -43,7 +42,6 @@ export default function RsvpPage() {
     }
   };
 
-  // 1. Vai buscar a data à base de dados
   useEffect(() => {
     const fetchDates = async () => {
       const res = await getEventConfig();
@@ -64,7 +62,7 @@ export default function RsvpPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 2. MAGIA: Constrói o link oficial do botão enquanto a pessoa preenche o formulário
+  // A inteligência do Link Nativo separada por sistema operativo
   useEffect(() => {
     const startDate = new Date(eventDates.start);
     const endDate = new Date(eventDates.end);
@@ -73,22 +71,20 @@ export default function RsvpPage() {
 
     const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
     const isAndroid = /android/i.test(ua);
-    const isAppBrowser = /Instagram|WhatsApp|FBAN|FBAV/i.test(ua);
-    
-    // Só ativamos o modo Android se NÃO estiver dentro do WhatsApp (que bloqueia)
-    setIsAndroidDevice(isAndroid && !isAppBrowser);
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
 
-    if (isAndroid && !isAppBrowser) {
-      // ANDROID PURO: Link direto para o sistema
+    if (isAndroid) {
+      // ANDROID: Intent direto. Não usa download e usa sempre _self para evitar tela branca.
       const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
       setCalendarUrl(intentUrl);
+      setDownloadAttr(undefined);
     } else {
-      // IPHONE, WHATSAPP, PC: Ficheiro Virtual (Blob) à prova de bloqueios
+      // Criação do ficheiro ICS virtual
       const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
       const icsContent = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//Mentoria Comunique//BR",
+        "PRODID:-//Mentoria Comunique//PT",
         "CALSCALE:GREGORIAN",
         "BEGIN:VEVENT",
         `DTSTART:${formatICSDate(startDate)}`,
@@ -102,12 +98,19 @@ export default function RsvpPage() {
         "END:VCALENDAR",
       ].join("\n");
 
-      const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      setCalendarUrl(url);
+      // Codificação Base64 infalível para o Safari do iPhone interpretar logo na janela
+      const base64Ics = typeof window !== 'undefined' ? window.btoa(unescape(encodeURIComponent(icsContent))) : '';
+      const dataUrl = `data:text/calendar;charset=utf-8;base64,${base64Ics}`;
+      
+      setCalendarUrl(dataUrl);
 
-      // Limpa a memória quando a página fecha
-      return () => URL.revokeObjectURL(url);
+      if (isIOS) {
+        // IPHONE: Sem atributo de download! Faz o pop-up nativo saltar no ecrã.
+        setDownloadAttr(undefined);
+      } else {
+        // COMPUTADOR: Só aqui forçamos o ficheiro a descarregar para a pasta de Transferências.
+        setDownloadAttr("mentoria-comunique.ics");
+      }
     }
   }, [eventDates]);
 
@@ -201,12 +204,10 @@ export default function RsvpPage() {
                   </div>
                   <div className="space-y-3 pt-4">
                     
-                    {/* LINK NATIVO SEM JAVASCRIPT NO CLIQUE */}
                     <a 
                       href={calendarUrl}
-                      download={!isAndroidDevice ? "mentoria-comunique.ics" : undefined}
-                      target={!isAndroidDevice ? "_self" : "_blank"}
-                      rel="noopener noreferrer"
+                      download={downloadAttr}
+                      target="_self"
                       className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95 no-underline"
                     >
                       <Calendar className="h-5 w-5 text-red-500" /> 
