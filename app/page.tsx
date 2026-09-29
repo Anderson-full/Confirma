@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createRsvp, getEventConfig } from "@/actions/rsvp"; 
 import { CheckCircle2, Calendar, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
 
+// Os detalhes do evento ficam limpos aqui em cima
 const eventDetails = {
   title: "Mentoria Comunique com Autoridade",
   location: "Google Meet",
@@ -30,10 +31,6 @@ export default function RsvpPage() {
     start: "2026-10-15T22:00:00.000Z",
     end: "2026-10-16T00:00:00.000Z"
   });
-
-  // Estados dedicados e precisos para o comportamento do link
-  const [calendarUrl, setCalendarUrl] = useState("#");
-  const [downloadAttr, setDownloadAttr] = useState<string | undefined>(undefined);
 
   const toggleSound = () => {
     if (videoRef.current) {
@@ -62,58 +59,6 @@ export default function RsvpPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // A inteligência do Link Nativo separada por sistema operativo
-  useEffect(() => {
-    const startDate = new Date(eventDates.start);
-    const endDate = new Date(eventDates.end);
-    const startMillis = startDate.getTime();
-    const endMillis = endDate.getTime();
-
-    const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
-    const isAndroid = /android/i.test(ua);
-    const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
-
-    if (isAndroid) {
-      // ANDROID: Intent direto. Não usa download e usa sempre _self para evitar tela branca.
-      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
-      setCalendarUrl(intentUrl);
-      setDownloadAttr(undefined);
-    } else {
-      // Criação do ficheiro ICS virtual
-      const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-      const icsContent = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Mentoria Comunique//PT",
-        "CALSCALE:GREGORIAN",
-        "BEGIN:VEVENT",
-        `DTSTART:${formatICSDate(startDate)}`,
-        `DTEND:${formatICSDate(endDate)}`,
-        `SUMMARY:${eventDetails.title}`,
-        `DESCRIPTION:${eventDetails.description}`,
-        `LOCATION:${eventDetails.location}`,
-        "STATUS:CONFIRMED",
-        "SEQUENCE:0",
-        "END:VEVENT",
-        "END:VCALENDAR",
-      ].join("\n");
-
-      // Codificação Base64 infalível para o Safari do iPhone interpretar logo na janela
-      const base64Ics = typeof window !== 'undefined' ? window.btoa(unescape(encodeURIComponent(icsContent))) : '';
-      const dataUrl = `data:text/calendar;charset=utf-8;base64,${base64Ics}`;
-      
-      setCalendarUrl(dataUrl);
-
-      if (isIOS) {
-        // IPHONE: Sem atributo de download! Faz o pop-up nativo saltar no ecrã.
-        setDownloadAttr(undefined);
-      } else {
-        // COMPUTADOR: Só aqui forçamos o ficheiro a descarregar para a pasta de Transferências.
-        setDownloadAttr("mentoria-comunique.ics");
-      }
-    }
-  }, [eventDates]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -132,6 +77,61 @@ export default function RsvpPage() {
       setError("Falha na comunicação com o servidor.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // A SOLUÇÃO NATIVA (Web Share API)
+  const handleCalendarClick = async () => {
+    try {
+      const startDate = new Date(eventDates.start || "2026-10-15T22:00:00Z");
+      const endDate = new Date(eventDates.end || "2026-10-16T00:00:00Z");
+
+      const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      const icsContent = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Mentoria Comunique//BR",
+        "CALSCALE:GREGORIAN",
+        "BEGIN:VEVENT",
+        `DTSTART:${formatICSDate(startDate)}`,
+        `DTEND:${formatICSDate(endDate)}`,
+        `SUMMARY:${eventDetails.title}`,
+        `DESCRIPTION:${eventDetails.description}`,
+        `LOCATION:${eventDetails.location}`,
+        "STATUS:CONFIRMED",
+        "SEQUENCE:0",
+        "END:VEVENT",
+        "END:VCALENDAR",
+      ].join("\n");
+
+      // Transforma o texto num Ficheiro Virtual
+      const file = new File([icsContent], "mentoria.ics", { type: "text/calendar" });
+
+      // Pergunta ao telemóvel: "Tens suporte para a janela de partilha nativa?"
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: eventDetails.title,
+          });
+          // Se abrir a janelinha do Android/iPhone, a função para aqui com sucesso!
+          return; 
+        } catch (error) {
+          console.log("O utilizador fechou a janela de partilha.");
+        }
+      } else {
+        // PLANO B: Se for um Computador ou navegador antigo que não tem janela de partilha, ele faz o download clássico.
+        const url = URL.createObjectURL(file);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "mentoria-comunique.ics");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+      }
+    } catch (err) {
+      alert("Ocorreu um erro ao preparar o calendário. Tente novamente.");
     }
   };
 
@@ -204,15 +204,14 @@ export default function RsvpPage() {
                   </div>
                   <div className="space-y-3 pt-4">
                     
-                    <a 
-                      href={calendarUrl}
-                      download={downloadAttr}
-                      target="_self"
-                      className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95 no-underline"
+                    {/* Voltámos para o formato nativo do React (<button>), pois agora chamamos a API Nativa do aparelho */}
+                    <button 
+                      onClick={handleCalendarClick}
+                      className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95"
                     >
                       <Calendar className="h-5 w-5 text-red-500" /> 
-                      Adicionar ao Calendário do Celular
-                    </a>
+                      Adicionar ao Calendário
+                    </button>
 
                   </div>
                 </div>
