@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { createRsvp, getEventConfig } from "../actions/rsvp"; 
-import { CheckCircle2, Calendar, Download, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
+import { createRsvp, getEventConfig } from "@/actions/rsvp"; 
+import { CheckCircle2, Calendar, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
 
 export default function RsvpPage() {
   const [nome, setNome] = useState("");
@@ -20,10 +20,10 @@ export default function RsvpPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(true);
 
-  // Estado para guardar as datas dinâmicas do banco de dados
+  // Agora guardamos a data original do banco para facilitar a conversão no telemóvel
   const [eventDates, setEventDates] = useState({
-    startUTC: "20261015T220000Z", // Data padrão de segurança
-    endUTC: "20261016T000000Z"
+    start: "2026-10-15T22:00:00.000Z",
+    end: "2026-10-16T00:00:00.000Z"
   });
 
   const toggleSound = () => {
@@ -34,15 +34,12 @@ export default function RsvpPage() {
   };
 
   useEffect(() => {
-    // Busca a data atualizada do painel admin assim que a página carrega
     const fetchDates = async () => {
       const res = await getEventConfig();
       if (res.success && res.start && res.end) {
-        // Formata a data do banco (2026-10-15T22:00:00.000Z) para o padrão do calendário (20261015T220000Z)
-        const formatToUTC = (isoString: string) => isoString.replace(/[-:]/g, "").split(".")[0] + "Z";
         setEventDates({
-          startUTC: formatToUTC(res.start),
-          endUTC: formatToUTC(res.end)
+          start: res.start,
+          end: res.end
         });
       }
     };
@@ -83,37 +80,59 @@ export default function RsvpPage() {
     }
   };
 
-  const getGoogleCalendarUrl = () => {
-    const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
-    const title = encodeURIComponent(eventDetails.title);
-    const dates = `${eventDates.startUTC}/${eventDates.endUTC}`;
-    const location = encodeURIComponent(eventDetails.location);
-    const details = encodeURIComponent(eventDetails.description);
-    return `${baseUrl}&text=${title}&dates=${dates}&details=${details}&location=${location}`;
-  };
+  // A Mágica do Calendário Nativo (Deep Link)
+  const handleCalendarClick = () => {
+    const startDate = new Date(eventDates.start);
+    const endDate = new Date(eventDates.end);
+    
+    // Tempos em milissegundos para o Android
+    const startMillis = startDate.getTime();
+    const endMillis = endDate.getTime();
 
-  const downloadICS = () => {
-    const icsContent = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//Mentoria Comunique//PT",
-      "BEGIN:VEVENT",
-      `DTSTART:${eventDates.startUTC}`,
-      `DTEND:${eventDates.endUTC}`,
-      `SUMMARY:${eventDetails.title}`,
-      `DESCRIPTION:${eventDetails.description}`,
-      `LOCATION:${eventDetails.location}`,
-      "END:VEVENT",
-      "END:VCALENDAR",
-    ].join("\n");
-    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "mentoria.ics");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Detetar se é Android ou iPhone
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isAndroid = /android/i.test(userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
+
+    if (isAndroid) {
+      // Abre DIRETAMENTE a APP Calendário do Android (sem baixar arquivo)
+      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
+      window.location.href = intentUrl;
+    } else {
+      // Para iPhone (iOS) e Web: Abre o formato suportado pela Apple direto no ecrã
+      const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      const icsContent = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Mentoria Comunique//PT",
+        "CALSCALE:GREGORIAN",
+        "BEGIN:VEVENT",
+        `DTSTART:${formatICSDate(startDate)}`,
+        `DTEND:${formatICSDate(endDate)}`,
+        `SUMMARY:${eventDetails.title}`,
+        `DESCRIPTION:${eventDetails.description}`,
+        `LOCATION:${eventDetails.location}`,
+        "STATUS:CONFIRMED",
+        "SEQUENCE:0",
+        "END:VEVENT",
+        "END:VCALENDAR",
+      ].join("\n");
+
+      if (isIOS) {
+        // No iPhone, ele interpreta esta string e abre a janela de adicionar evento na hora!
+        window.location.href = `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
+      } else {
+        // Se for no Computador, faz o processo normal
+        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "mentoria-comunique.ics");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    }
   };
 
   return (
@@ -183,9 +202,14 @@ export default function RsvpPage() {
                     <h2 className="text-xl font-bold text-white tracking-tight">Presença Confirmada, {userName ? userName.split(" ")[0] : "Mentorando"}! 🎉</h2>
                     <p className="text-zinc-400 text-xs leading-relaxed">O seu lugar está garantido com sucesso. Adicione o evento à sua agenda para não perder nada:</p>
                   </div>
-                  <div className="space-y-3 pt-2">
-                    <a href={getGoogleCalendarUrl()} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white font-semibold py-3.5 rounded-2xl transition-all text-sm shadow-md hover:border-red-500/40"><Calendar className="h-4 w-4 text-red-500" /> Google Agenda</a>
-                    <button onClick={downloadICS} className="w-full flex items-center justify-center gap-2.5 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-3.5 rounded-2xl transition-all text-sm shadow-md"><Download className="h-4 w-4 text-zinc-400" /> Apple / Outlook (.ics)</button>
+                  <div className="space-y-3 pt-4">
+                    
+                    {/* ESTE É O NOVO BOTÃO ÚNICO! */}
+                    <button onClick={handleCalendarClick} className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50">
+                      <Calendar className="h-5 w-5 text-red-500" /> 
+                      Adicionar ao Calendário do Celular
+                    </button>
+
                   </div>
                 </div>
               )}
