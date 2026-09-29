@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { createRsvp, getEventConfig } from "../actions/rsvp"; 
+import { createRsvp, getEventConfig } from "@/actions/rsvp"; 
 import { CheckCircle2, Calendar, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
 
 export default function RsvpPage() {
