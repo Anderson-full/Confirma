@@ -25,11 +25,22 @@ export default function RsvpPage() {
     end: "2026-10-16T00:00:00.000Z"
   });
 
+  // Novos estados para controlar perfeitamente o Link do Calendário
+  const [calendarUrl, setCalendarUrl] = useState("#");
+  const [downloadName, setDownloadName] = useState<string | undefined>(undefined);
+  const [targetAttr, setTargetAttr] = useState<string>("_self");
+
   const toggleSound = () => {
     if (videoRef.current) {
       videoRef.current.muted = !isMuted;
       setIsMuted(!isMuted);
     }
+  };
+
+  const eventDetails = {
+    title: "Mentoria Comunique com Autoridade",
+    location: "Google Meet",
+    description: "Encontro ao vivo para alinhamento e próximos passos da mentoria.",
   };
 
   useEffect(() => {
@@ -52,11 +63,57 @@ export default function RsvpPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const eventDetails = {
-    title: "Mentoria Comunique com Autoridade",
-    location: "Google Meet",
-    description: "Encontro ao vivo para alinhamento e próximos passos da mentoria.",
-  };
+  // A Mágica de Separação (Android vs iPhone vs Computador)
+  useEffect(() => {
+    const startDate = new Date(eventDates.start);
+    const endDate = new Date(eventDates.end);
+    const startMillis = startDate.getTime();
+    const endMillis = endDate.getTime();
+
+    const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isAndroid = /android/i.test(ua);
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+
+    if (isAndroid) {
+      // ANDROID: Abre logo a aplicação do calendário via Deep Link. Sem download.
+      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
+      setCalendarUrl(intentUrl);
+      setDownloadName(undefined);
+      setTargetAttr("_blank");
+    } else {
+      // IPHONE E COMPUTADOR: Precisam do texto do evento (.ics)
+      const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      const icsContent = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Mentoria Comunique//PT",
+        "CALSCALE:GREGORIAN",
+        "BEGIN:VEVENT",
+        `DTSTART:${formatICSDate(startDate)}`,
+        `DTEND:${formatICSDate(endDate)}`,
+        `SUMMARY:${eventDetails.title}`,
+        `DESCRIPTION:${eventDetails.description}`,
+        `LOCATION:${eventDetails.location}`,
+        "STATUS:CONFIRMED",
+        "SEQUENCE:0",
+        "END:VEVENT",
+        "END:VCALENDAR",
+      ].join("\n");
+
+      const dataUrl = `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
+      setCalendarUrl(dataUrl);
+
+      if (isIOS) {
+        // IPHONE: Não força o download! O Safari apenas lê o texto e abre a telinha do calendário.
+        setDownloadName(undefined); 
+        setTargetAttr("_self");
+      } else {
+        // COMPUTADOR: Aqui sim, é obrigado a transferir o ficheiro .ics
+        setDownloadName("mentoria-comunique.ics");
+        setTargetAttr("_self");
+      }
+    }
+  }, [eventDates]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,67 +133,6 @@ export default function RsvpPage() {
       setError("Falha na comunicação com o servidor.");
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // A função Blindada para Mobile
-  const handleCalendarClick = () => {
-    try {
-      // Usa as datas ou um fallback seguro para não quebrar o JS
-      const startDate = new Date(eventDates.start || "2026-10-15T22:00:00Z");
-      const endDate = new Date(eventDates.end || "2026-10-16T00:00:00Z");
-      
-      const startMillis = startDate.getTime();
-      const endMillis = endDate.getTime();
-
-      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
-      const isAndroid = /android/i.test(userAgent);
-      
-      // Deteta se abriu no navegador interno do Instagram ou WhatsApp (onde Intents são bloqueados)
-      const isAppBrowser = /Instagram|WhatsApp|FBAN|FBAV/i.test(userAgent);
-
-      if (isAndroid && !isAppBrowser) {
-        // Criar um link oculto e clicar resolve o bloqueio do Chrome no Android
-        const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
-        
-        const link = document.createElement("a");
-        link.href = intentUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        // Fallback seguro: iOS, Computador, ou navegadores de App (WhatsApp/Insta)
-        const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-        const icsContent = [
-          "BEGIN:VCALENDAR",
-          "VERSION:2.0",
-          "PRODID:-//Mentoria Comunique//PT",
-          "CALSCALE:GREGORIAN",
-          "BEGIN:VEVENT",
-          `DTSTART:${formatICSDate(startDate)}`,
-          `DTEND:${formatICSDate(endDate)}`,
-          `SUMMARY:${eventDetails.title}`,
-          `DESCRIPTION:${eventDetails.description}`,
-          `LOCATION:${eventDetails.location}`,
-          "STATUS:CONFIRMED",
-          "SEQUENCE:0",
-          "END:VEVENT",
-          "END:VCALENDAR",
-        ].join("\n");
-
-        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", "mentoria-comunique.ics");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-      }
-    } catch (err) {
-      alert("Ocorreu um erro ao abrir o calendário. Tente novamente.");
     }
   };
 
@@ -208,10 +204,17 @@ export default function RsvpPage() {
                     <p className="text-zinc-400 text-xs leading-relaxed">O seu lugar está garantido com sucesso. Adicione o evento à sua agenda para não perder nada:</p>
                   </div>
                   <div className="space-y-3 pt-4">
-                    <button onClick={handleCalendarClick} className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95">
+                    
+                    <a 
+                      href={calendarUrl}
+                      download={downloadName}
+                      target={targetAttr}
+                      className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95 no-underline"
+                    >
                       <Calendar className="h-5 w-5 text-red-500" /> 
                       Adicionar ao Calendário do Celular
-                    </button>
+                    </a>
+
                   </div>
                 </div>
               )}
