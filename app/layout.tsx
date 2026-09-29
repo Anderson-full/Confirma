@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
+const inter = Inter({ subsets: ["latin"] });
+
 export const metadata: Metadata = {
-  title: "Mentoria Comunique - RSVP",
-  description: "Confirme a sua presença na próxima mentoria.",
+  title: "Mentoria Comunique",
+  description: "Confirme a sua presença na Mentoria Comunique com Autoridade",
+  icons: {
+    icon: "/perfil.jpg",
+  },
 };
 
 export default function RootLayout({
@@ -13,9 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className="antialiased">
-        {children}
-      </body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }

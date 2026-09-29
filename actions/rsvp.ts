@@ -23,7 +23,6 @@ export async function createRsvp(nome: string, email: string, telefone: string) 
   }
 }
 
-// Esta é a nova função que envia a data do painel Admin para o formulário
 export async function getEventConfig() {
   try {
     const config = await prisma.configuracao.findFirst();
@@ -37,5 +36,17 @@ export async function getEventConfig() {
     return { success: false };
   } catch (error) {
     return { success: false };
+  }
+}
+
+export async function deleteRsvp(id: string) {
+  try {
+    // @ts-ignore
+    await (prisma.rsvp || prisma.rSVP).delete({
+      where: { id }
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: "Erro ao excluir a inscrição." };
   }
 }

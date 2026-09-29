@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createRsvp } from "@/actions/rsvp"; 
-import { CheckCircle2, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, User, Volume2, VolumeX, Phone } from "lucide-react";
 
 export default function RsvpPage() {
   const [nome, setNome] = useState("");
@@ -78,8 +78,12 @@ export default function RsvpPage() {
               {!isSuccess ? (
                 <div className="space-y-6">
                   <div className="text-center space-y-3">
-                    <div className="flex justify-center mb-2">
-                      <div className="bg-red-500/10 border border-red-500/20 p-3.5 rounded-2xl shadow-inner"><Sparkles className="h-7 w-7 text-red-500" /></div>
+                    <div className="flex justify-center mb-4">
+                      <img 
+                        src="/perfill.jpg" 
+                        alt="Mentoria Comunique" 
+                        className="h-20 w-auto max-w-[280px] rounded-xl border border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)] object-contain"
+                      />
                     </div>
                     <h1 className="text-2xl font-bold tracking-tight text-white">Confirme a sua presença</h1>
                     <p className="text-zinc-400 text-xs tracking-wider uppercase font-medium">Mentoria <span className="font-bold text-red-500 normal-case">Comunique com Autoridade</span></p>

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+// Importamos a nova função deleteRsvp aqui
 import { getDashboardData, updateDatas } from "@/actions/admin"; 
-import { Lock, Users, Calendar, Save, Loader2 } from "lucide-react";
+import { deleteRsvp } from "@/actions/rsvp"; 
+import { Lock, Users, Calendar, Save, Loader2, Trash2 } from "lucide-react";
 
 export default function AdminDashboard() {
   const [senha, setSenha] = useState("");
@@ -48,6 +50,22 @@ export default function AdminDashboard() {
       alert("Erro ao atualizar data.");
     }
     setIsSaving(false);
+  };
+
+  // Nova função para lidar com o clique no caixote do lixo
+  const handleDelete = async (id: string, nome: string) => {
+    // Pede confirmação antes de apagar
+    if (!window.confirm(`Tem a certeza absoluta que deseja excluir a inscrição de ${nome}?`)) {
+      return;
+    }
+
+    const res = await deleteRsvp(id);
+    if (res.success) {
+      // Remove a pessoa da lista no ecrã imediatamente, sem precisar de recarregar a página
+      setRsvps(rsvps.filter((rsvp) => rsvp.id !== id));
+    } else {
+      alert("Erro ao excluir. Verifique se o backend está configurado corretamente.");
+    }
   };
 
   if (!isLogged) {
@@ -120,21 +138,31 @@ export default function AdminDashboard() {
                     <th className="px-4 py-3 rounded-l-lg">Nome</th>
                     <th className="px-4 py-3">E-mail</th>
                     <th className="px-4 py-3">WhatsApp</th>
-                    <th className="px-4 py-3 rounded-r-lg">Data</th>
+                    <th className="px-4 py-3">Data</th>
+                    <th className="px-4 py-3 rounded-r-lg text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rsvps.map((rsvp, idx) => (
-                    <tr key={idx} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                  {rsvps.map((rsvp) => (
+                    <tr key={rsvp.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors group">
                       <td className="px-4 py-4 font-medium text-white">{rsvp.nome}</td>
                       <td className="px-4 py-4">{rsvp.email}</td>
                       <td className="px-4 py-4">{rsvp.telefone || "-"}</td>
                       <td className="px-4 py-4">{new Date(rsvp.criadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })}</td>
+                      <td className="px-4 py-4 text-right">
+                        <button 
+                          onClick={() => handleDelete(rsvp.id, rsvp.nome)}
+                          className="p-2 bg-zinc-900 text-zinc-500 hover:bg-red-900/50 hover:text-red-500 rounded-lg transition-all opacity-50 group-hover:opacity-100"
+                          title="Excluir Inscrição"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {rsvps.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="text-center py-8 text-zinc-500">Nenhuma confirmação ainda.</td>
+                      <td colSpan={5} className="text-center py-8 text-zinc-500">Nenhuma confirmação ainda.</td>
                     </tr>
                   )}
                 </tbody>
