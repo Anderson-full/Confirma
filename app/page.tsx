@@ -1,15 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { createRsvp, getEventConfig } from "@/actions/rsvp"; 
-import { CheckCircle2, Calendar, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
-
-// Os detalhes do evento ficam limpos aqui em cima
-const eventDetails = {
-  title: "Mentoria Comunique com Autoridade",
-  location: "Google Meet",
-  description: "Encontro ao vivo para alinhamento e próximos passos da mentoria.",
-};
+import { createRsvp } from "@/actions/rsvp"; 
+import { CheckCircle2, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
 
 export default function RsvpPage() {
   const [nome, setNome] = useState("");
@@ -27,11 +20,6 @@ export default function RsvpPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(true);
 
-  const [eventDates, setEventDates] = useState({
-    start: "2026-10-15T22:00:00.000Z",
-    end: "2026-10-16T00:00:00.000Z"
-  });
-
   const toggleSound = () => {
     if (videoRef.current) {
       videoRef.current.muted = !isMuted;
@@ -40,17 +28,6 @@ export default function RsvpPage() {
   };
 
   useEffect(() => {
-    const fetchDates = async () => {
-      const res = await getEventConfig();
-      if (res.success && res.start && res.end) {
-        setEventDates({
-          start: res.start,
-          end: res.end
-        });
-      }
-    };
-    fetchDates();
-
     const timer = setTimeout(() => {
       setShowForm(true);
       setTimeout(() => setFadeIn(true), 50);
@@ -77,61 +54,6 @@ export default function RsvpPage() {
       setError("Falha na comunicação com o servidor.");
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // A SOLUÇÃO NATIVA (Web Share API)
-  const handleCalendarClick = async () => {
-    try {
-      const startDate = new Date(eventDates.start || "2026-10-15T22:00:00Z");
-      const endDate = new Date(eventDates.end || "2026-10-16T00:00:00Z");
-
-      const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-      const icsContent = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Mentoria Comunique//BR",
-        "CALSCALE:GREGORIAN",
-        "BEGIN:VEVENT",
-        `DTSTART:${formatICSDate(startDate)}`,
-        `DTEND:${formatICSDate(endDate)}`,
-        `SUMMARY:${eventDetails.title}`,
-        `DESCRIPTION:${eventDetails.description}`,
-        `LOCATION:${eventDetails.location}`,
-        "STATUS:CONFIRMED",
-        "SEQUENCE:0",
-        "END:VEVENT",
-        "END:VCALENDAR",
-      ].join("\n");
-
-      // Transforma o texto num Ficheiro Virtual
-      const file = new File([icsContent], "mentoria.ics", { type: "text/calendar" });
-
-      // Pergunta ao telemóvel: "Tens suporte para a janela de partilha nativa?"
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: eventDetails.title,
-          });
-          // Se abrir a janelinha do Android/iPhone, a função para aqui com sucesso!
-          return; 
-        } catch (error) {
-          console.log("O utilizador fechou a janela de partilha.");
-        }
-      } else {
-        // PLANO B: Se for um Computador ou navegador antigo que não tem janela de partilha, ele faz o download clássico.
-        const url = URL.createObjectURL(file);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", "mentoria-comunique.ics");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-      }
-    } catch (err) {
-      alert("Ocorreu um erro ao preparar o calendário. Tente novamente.");
     }
   };
 
@@ -196,23 +118,15 @@ export default function RsvpPage() {
                   </form>
                 </div>
               ) : (
-                <div className="space-y-6 py-2">
-                  <div className="text-center space-y-3">
-                    <div className="flex justify-center"><div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-full relative shadow-lg"><CheckCircle2 className="h-10 w-10 text-emerald-400 relative z-10 animate-bounce" /></div></div>
-                    <h2 className="text-xl font-bold text-white tracking-tight">Presença Confirmada, {userName ? userName.split(" ")[0] : "Mentorando"}! 🎉</h2>
-                    <p className="text-zinc-400 text-xs leading-relaxed">O seu lugar está garantido com sucesso. Adicione o evento à sua agenda para não perder nada:</p>
+                <div className="space-y-6 py-4 text-center">
+                  <div className="flex justify-center">
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-full relative shadow-lg">
+                      <CheckCircle2 className="h-10 w-10 text-emerald-400 relative z-10 animate-bounce" />
+                    </div>
                   </div>
-                  <div className="space-y-3 pt-4">
-                    
-                    {/* Voltámos para o formato nativo do React (<button>), pois agora chamamos a API Nativa do aparelho */}
-                    <button 
-                      onClick={handleCalendarClick}
-                      className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95"
-                    >
-                      <Calendar className="h-5 w-5 text-red-500" /> 
-                      Adicionar ao Calendário
-                    </button>
-
+                  <div className="space-y-2">
+                    <h2 className="text-xl font-bold text-white tracking-tight">Presença Confirmada, {userName ? userName.split(" ")[0] : "Mentorando"}! 🎉</h2>
+                    <p className="text-zinc-400 text-xs leading-relaxed max-w-xs mx-auto">O seu lugar está garantido com sucesso. Entraremos em contacto através dos dados fornecidos com os próximos passos.</p>
                   </div>
                 </div>
               )}
