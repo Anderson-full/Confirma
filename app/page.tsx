@@ -20,7 +20,6 @@ export default function RsvpPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(true);
 
-  // Agora guardamos a data original do banco para facilitar a conversão no telemóvel
   const [eventDates, setEventDates] = useState({
     start: "2026-10-15T22:00:00.000Z",
     end: "2026-10-16T00:00:00.000Z"
@@ -80,49 +79,51 @@ export default function RsvpPage() {
     }
   };
 
-  // A Mágica do Calendário Nativo (Deep Link)
+  // A função Blindada para Mobile
   const handleCalendarClick = () => {
-    const startDate = new Date(eventDates.start);
-    const endDate = new Date(eventDates.end);
-    
-    // Tempos em milissegundos para o Android
-    const startMillis = startDate.getTime();
-    const endMillis = endDate.getTime();
+    try {
+      // Usa as datas ou um fallback seguro para não quebrar o JS
+      const startDate = new Date(eventDates.start || "2026-10-15T22:00:00Z");
+      const endDate = new Date(eventDates.end || "2026-10-16T00:00:00Z");
+      
+      const startMillis = startDate.getTime();
+      const endMillis = endDate.getTime();
 
-    // Detetar se é Android ou iPhone
-    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
-    const isAndroid = /android/i.test(userAgent);
-    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const isAndroid = /android/i.test(userAgent);
+      
+      // Deteta se abriu no navegador interno do Instagram ou WhatsApp (onde Intents são bloqueados)
+      const isAppBrowser = /Instagram|WhatsApp|FBAN|FBAV/i.test(userAgent);
 
-    if (isAndroid) {
-      // Abre DIRETAMENTE a APP Calendário do Android (sem baixar arquivo)
-      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
-      window.location.href = intentUrl;
-    } else {
-      // Para iPhone (iOS) e Web: Abre o formato suportado pela Apple direto no ecrã
-      const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-      const icsContent = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Mentoria Comunique//PT",
-        "CALSCALE:GREGORIAN",
-        "BEGIN:VEVENT",
-        `DTSTART:${formatICSDate(startDate)}`,
-        `DTEND:${formatICSDate(endDate)}`,
-        `SUMMARY:${eventDetails.title}`,
-        `DESCRIPTION:${eventDetails.description}`,
-        `LOCATION:${eventDetails.location}`,
-        "STATUS:CONFIRMED",
-        "SEQUENCE:0",
-        "END:VEVENT",
-        "END:VCALENDAR",
-      ].join("\n");
-
-      if (isIOS) {
-        // No iPhone, ele interpreta esta string e abre a janela de adicionar evento na hora!
-        window.location.href = `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
+      if (isAndroid && !isAppBrowser) {
+        // Criar um link oculto e clicar resolve o bloqueio do Chrome no Android
+        const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
+        
+        const link = document.createElement("a");
+        link.href = intentUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } else {
-        // Se for no Computador, faz o processo normal
+        // Fallback seguro: iOS, Computador, ou navegadores de App (WhatsApp/Insta)
+        const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+        const icsContent = [
+          "BEGIN:VCALENDAR",
+          "VERSION:2.0",
+          "PRODID:-//Mentoria Comunique//PT",
+          "CALSCALE:GREGORIAN",
+          "BEGIN:VEVENT",
+          `DTSTART:${formatICSDate(startDate)}`,
+          `DTEND:${formatICSDate(endDate)}`,
+          `SUMMARY:${eventDetails.title}`,
+          `DESCRIPTION:${eventDetails.description}`,
+          `LOCATION:${eventDetails.location}`,
+          "STATUS:CONFIRMED",
+          "SEQUENCE:0",
+          "END:VEVENT",
+          "END:VCALENDAR",
+        ].join("\n");
+
         const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -131,7 +132,11 @@ export default function RsvpPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+        setTimeout(() => URL.revokeObjectURL(url), 100);
       }
+    } catch (err) {
+      alert("Ocorreu um erro ao abrir o calendário. Tente novamente.");
     }
   };
 
@@ -203,13 +208,10 @@ export default function RsvpPage() {
                     <p className="text-zinc-400 text-xs leading-relaxed">O seu lugar está garantido com sucesso. Adicione o evento à sua agenda para não perder nada:</p>
                   </div>
                   <div className="space-y-3 pt-4">
-                    
-                    {/* ESTE É O NOVO BOTÃO ÚNICO! */}
-                    <button onClick={handleCalendarClick} className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50">
+                    <button onClick={handleCalendarClick} className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95">
                       <Calendar className="h-5 w-5 text-red-500" /> 
                       Adicionar ao Calendário do Celular
                     </button>
-
                   </div>
                 </div>
               )}
