@@ -4,6 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { createRsvp, getEventConfig } from "@/actions/rsvp"; 
 import { CheckCircle2, Calendar, Loader2, Mail, User, Sparkles, Volume2, VolumeX, Phone } from "lucide-react";
 
+// Colocamos os detalhes fora do componente para ficar limpo e rápido
+const eventDetails = {
+  title: "Mentoria Comunique com Autoridade",
+  location: "Google Meet",
+  description: "Encontro ao vivo para alinhamento e próximos passos da mentoria.",
+};
+
 export default function RsvpPage() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -25,6 +32,10 @@ export default function RsvpPage() {
     end: "2026-10-16T00:00:00.000Z"
   });
 
+  // Novos estados para preparar o link oficial antes do clique
+  const [calendarUrl, setCalendarUrl] = useState("");
+  const [isAndroidDevice, setIsAndroidDevice] = useState(false);
+
   const toggleSound = () => {
     if (videoRef.current) {
       videoRef.current.muted = !isMuted;
@@ -32,12 +43,7 @@ export default function RsvpPage() {
     }
   };
 
-  const eventDetails = {
-    title: "Mentoria Comunique com Autoridade",
-    location: "Google Meet",
-    description: "Encontro ao vivo para alinhamento e próximos passos da mentoria.",
-  };
-
+  // 1. Vai buscar a data à base de dados
   useEffect(() => {
     const fetchDates = async () => {
       const res = await getEventConfig();
@@ -58,43 +64,26 @@ export default function RsvpPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
+  // 2. MAGIA: Constrói o link oficial do botão enquanto a pessoa preenche o formulário
+  useEffect(() => {
+    const startDate = new Date(eventDates.start);
+    const endDate = new Date(eventDates.end);
+    const startMillis = startDate.getTime();
+    const endMillis = endDate.getTime();
 
-    try {
-      const response = await createRsvp(nome, email, telefone);
-
-      if (response.success) {
-        setUserName(response.nome || nome || "Mentorando");
-        setIsSuccess(true);
-      } else {
-        setError(response.error || "Erro desconhecido.");
-      }
-    } catch (err) {
-      setError("Falha na comunicação com o servidor.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Função cirúrgica e limpa para evitar telas brancas
-  const handleCalendarClick = (e: React.MouseEvent) => {
-    e.preventDefault();
+    const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isAndroid = /android/i.test(ua);
+    const isAppBrowser = /Instagram|WhatsApp|FBAN|FBAV/i.test(ua);
     
-    try {
-      const startDate = new Date(eventDates.start || "2026-10-15T22:00:00Z");
-      const endDate = new Date(eventDates.end || "2026-10-16T00:00:00Z");
-      const startMillis = startDate.getTime();
-      const endMillis = endDate.getTime();
+    // Só ativamos o modo Android se NÃO estiver dentro do WhatsApp (que bloqueia)
+    setIsAndroidDevice(isAndroid && !isAppBrowser);
 
-      // Detecção de sistema e navegadores
-      const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
-      const isAndroid = /android/i.test(ua);
-      const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
-      const isAppBrowser = /Instagram|WhatsApp|FBAN|FBAV/i.test(ua);
-
+    if (isAndroid && !isAppBrowser) {
+      // ANDROID PURO: Link direto para o sistema
+      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
+      setCalendarUrl(intentUrl);
+    } else {
+      // IPHONE, WHATSAPP, PC: Ficheiro Virtual (Blob) à prova de bloqueios
       const formatICSDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
       const icsContent = [
         "BEGIN:VCALENDAR",
@@ -113,27 +102,33 @@ export default function RsvpPage() {
         "END:VCALENDAR",
       ].join("\n");
 
-      if (isIOS) {
-        // IPHONE: Direto no Safari sem arquivos
-        window.location.assign(`data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`);
-      } else if (isAndroid && !isAppBrowser) {
-        // ANDROID: Intent direto, sem downloads escondidos (fim da tela branca)
-        const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${encodeURIComponent(eventDetails.title)};S.description=${encodeURIComponent(eventDetails.description)};S.eventLocation=${encodeURIComponent(eventDetails.location)};l.beginTime=${startMillis};l.endTime=${endMillis};end;`;
-        window.location.assign(intentUrl);
+      const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      setCalendarUrl(url);
+
+      // Limpa a memória quando a página fecha
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [eventDates]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await createRsvp(nome, email, telefone);
+
+      if (response.success) {
+        setUserName(response.nome || nome || "Mentorando");
+        setIsSuccess(true);
       } else {
-        // COMPUTADOR & NAVEGADORES BLOQUEADOS (WhatsApp/Insta)
-        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", "mentoria-comunique.ics");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+        setError(response.error || "Erro desconhecido.");
       }
     } catch (err) {
-      alert("Ocorreu um erro ao abrir o calendário. Tente novamente.");
+      setError("Falha na comunicação com o servidor.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -206,13 +201,17 @@ export default function RsvpPage() {
                   </div>
                   <div className="space-y-3 pt-4">
                     
-                    <button 
-                      onClick={handleCalendarClick}
-                      className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95"
+                    {/* LINK NATIVO SEM JAVASCRIPT NO CLIQUE */}
+                    <a 
+                      href={calendarUrl}
+                      download={!isAndroidDevice ? "mentoria-comunique.ics" : undefined}
+                      target={!isAndroidDevice ? "_self" : "_blank"}
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded-2xl transition-all text-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)] hover:border-red-500/50 cursor-pointer active:scale-95 no-underline"
                     >
                       <Calendar className="h-5 w-5 text-red-500" /> 
                       Adicionar ao Calendário do Celular
-                    </button>
+                    </a>
 
                   </div>
                 </div>
