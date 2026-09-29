@@ -25,10 +25,12 @@ export default function AdminDashboard() {
       setRsvps(res.rsvps || []);
       setConfig(res.config);
       
-      const start = new Date(res.config?.dataInicio).toISOString().slice(0, 16);
-      const end = new Date(res.config?.dataFim).toISOString().slice(0, 16);
-      setDataInicio(start);
-      setDataFim(end);
+      if (res.config && res.config.dataInicio && res.config.dataFim) {
+        const start = new Date(res.config.dataInicio).toISOString().slice(0, 16);
+        const end = new Date(res.config.dataFim).toISOString().slice(0, 16);
+        setDataInicio(start);
+        setDataFim(end);
+      }
       
       setIsLogged(true);
     } else {
