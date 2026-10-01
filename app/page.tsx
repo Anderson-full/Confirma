@@ -31,7 +31,7 @@ export default function RsvpPage() {
     // mas com atraso suficiente para o vídeo de fundo causar impacto primeiro.
     const timer = setTimeout(() => {
       setIsVisible(true);
-    }, 800);
+    }, 2900);
     
     return () => clearTimeout(timer);
   }, []);
