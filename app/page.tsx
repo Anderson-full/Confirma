@@ -151,7 +151,7 @@ export default function RsvpPage() {
                 <div className="space-y-3">
                   <h2 className="text-2xl font-bold text-white tracking-tight">Presença Confirmada!</h2>
                   <p className="text-zinc-400 text-sm leading-relaxed max-w-xs mx-auto">
-                    Excelente decisão, <strong className="text-white font-semibold">{userName ? userName.split(" ")[0] : "Mentorando"}</strong>. O seu lugar está garantido. Entraremos em contacto através dos dados fornecidos.
+                    Excelente decisão, <strong className="text-white font-semibold">{userName ? userName.split(" ")[0] : "Mentorando"}</strong>. O seu lugar está garantido. Entraremos em contato através dos dados fornecidos.
                   </p>
                 </div>
               </div>
